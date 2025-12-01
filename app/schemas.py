@@ -13,6 +13,16 @@ class KpiResponse(BaseModel):
     period_end: Optional[date] = None
 
 
+class AggregatedKpiResponse(BaseModel):
+    site_id: Optional[int] = None
+    period_start: date
+    period_end: date
+    session_count: int
+    total_energy_kwh: float | None = None
+    average_session_kwh: float | None = None
+    total_session_hours: float | None = None
+
+
 class SessionResponse(BaseModel):
     session_id: Optional[int] = None
     site_id: Optional[int] = None

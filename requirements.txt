@@ -4,3 +4,4 @@ sqlalchemy
 pydantic-settings
 fastapi-cache2
 redis
+apscheduler
