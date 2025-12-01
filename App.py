@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 import plotly.express as px
-from sqlalchemy import create_engine
 import plotly.graph_objects as go
 import datetime
 import calendar
@@ -25,6 +24,9 @@ from tabs import (
     tab11_evolution,
     tab12_defauts_historique,
 )
+from tabs import evi as evi_api
+from tabs import kpi as kpi_api
+from tabs import sessions as sessions_api
 import dashboard_home
 
 # COULEURS 
@@ -104,22 +106,6 @@ def gen_key(prefix: str) -> str:
 def plot(fig, key_prefix: str):
     st.plotly_chart(fig, use_container_width=True, key=gen_key(key_prefix))
 
-@st.cache_data(show_spinner=False, ttl=3600)
-def load_kpis_from_sql():
-    engine = create_engine("mysql+pymysql://nidec:MaV38f5xsGQp83@162.19.251.55:3306/Charges")
-    query = """
-        SELECT TABLE_NAME
-        FROM information_schema.tables
-        WHERE table_schema = 'Charges' AND table_name LIKE 'kpi_%%'
-    """
-    df_tables = pd.read_sql(query, con=engine)
-    table_names = df_tables["TABLE_NAME"].tolist()  
-    kpis = {}
-    for name in table_names:
-        df = pd.read_sql(f"SELECT * FROM Charges.{name}", con=engine)
-        kpis[name.replace("kpi_", "")] = df
-    return kpis
-
 def evi_counts_pivot(df):
     tmp = df.copy()
     tmp["EVI_Code"] = pd.to_numeric(tmp["EVI_Code"], errors="coerce").fillna(0).astype(int)
@@ -185,17 +171,22 @@ def with_charge_link(df: pd.DataFrame, id_col: str = "ID", link_col: str = "Lien
     out[link_col] = BASE_CHARGE_URL + out[id_col]
     return out
 
-tables = load_kpis_from_sql()
-
-evi_long      = tables.get("evi_combo_long", pd.DataFrame())
-evi_by_site   = tables.get("evi_combo_by_site", pd.DataFrame())
-evi_by_site_p = tables.get("evi_combo_by_site_pdc", pd.DataFrame())
-
-sessions = tables.get("sessions", pd.DataFrame())
+with st.spinner("Chargement des sessions..."):
+    sessions = sessions_api.fetch_sessions(site_id=None, start=None, end=None)
 
 if sessions.empty:
-    st.error("Aucune donnée dans `sessions` — lancer la mise à jour.")
+    st.error("Aucune donnée dans `sessions` — vérifier la configuration de l'API.")
     st.stop()
+
+with st.spinner("Chargement des KPI..."):
+    kpi_tables = kpi_api.fetch_kpis(site_id=None, start=None, end=None)
+
+with st.spinner("Chargement des événements EVI..."):
+    evi_long = evi_api.fetch_evi(site_id=None, start=None, end=None)
+
+evi_by_site = pd.DataFrame()
+evi_by_site_p = pd.DataFrame()
+tables = {**kpi_tables, "sessions": sessions, "evi_combo_long": evi_long}
 
 SITE_COL = "Site" if "Site" in sessions.columns else "Name Project"
 sites = sorted(sessions[SITE_COL].dropna().unique().tolist())
